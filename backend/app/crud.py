@@ -18,3 +18,4 @@ def create_short_url(db: Session, *, code: str, target_url: str) -> ShortURL:
     db.commit()
     db.refresh(short)
     return short
+

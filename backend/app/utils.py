@@ -14,3 +14,4 @@ def generate_code(length: int = 6) -> str:
 
 def is_code_available(db: Session, code: str) -> bool:
     return not db.query(ShortURL).filter(ShortURL.code == code).first()
+

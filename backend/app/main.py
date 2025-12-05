@@ -42,7 +42,7 @@ def shorten_url(payload: schemas.ShortenRequest, db: Session = Depends(get_db)):
     else:
         short = crud.create_short_url(db=db, code=code, target_url=str(payload.url))
 
-    short_url = f"{settings.base_url.rstrip('/')}/{short.code}"
+    short_url = f"{str(settings.base_url).rstrip('/')}/{short.code}"
     return schemas.ShortenResponse(code=short.code, short_url=short_url, created_at=short.created_at)
 
 
