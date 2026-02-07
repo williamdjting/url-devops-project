@@ -1,43 +1,50 @@
-from datetime import datetime
+"""Request and response schemas for the CI log analysis API."""
 
-from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
-
-
-class ShortenRequest(BaseModel):
-    url: AnyHttpUrl = Field(..., description="The destination URL to shorten")
-    custom_code: str | None = Field(default=None, min_length=4, max_length=16)
-
-    @field_validator('custom_code', mode='before')
-    @classmethod
-    def validate_custom_code(cls, v):
-        """Convert empty strings to None and validate format if provided."""
-        if v == "" or v is None:
-            return None
-        if isinstance(v, str):
-            v = v.strip()
-            if v == "":
-                return None
-            if len(v) < 4:
-                raise ValueError("Custom code must be at least 4 characters long")
-            if len(v) > 16:
-                raise ValueError("Custom code must be at most 16 characters long")
-            # Only allow alphanumeric characters (letters and digits)
-            if not v.isalnum():
-                raise ValueError("Custom code can only contain letters and numbers")
-        return v
+from enum import Enum
+from pydantic import BaseModel, Field
 
 
-class ShortenResponse(BaseModel):
-    code: str
-    short_url: AnyHttpUrl
-    created_at: datetime
+class CIProvider(str, Enum):
+    GITHUB_ACTIONS = "github_actions"
+    JENKINS = "jenkins"
 
 
-class ShortURLRecord(BaseModel):
-    id: int
-    code: str
-    target_url: AnyHttpUrl
-    created_at: datetime
+class FailureClassification(str, Enum):
+    TEST_FAILURE = "test_failure"
+    LINT_FAILURE = "lint_failure"
+    INFRA_FAILURE = "infra_failure"
+    CONFIG_FAILURE = "config_failure"
+    UNKNOWN = "unknown"
 
-    class Config:
-        from_attributes = True
+
+class AnalyzeRequest(BaseModel):
+    log_content: str = Field(..., description="Raw CI log output pasted by the user")
+    ci_provider: CIProvider | None = Field(
+        default=None,
+        description="Optional: GitHub Actions or Jenkins",
+    )
+    step_name: str | None = Field(default=None, description="Optional: name of the failing step")
+    exit_code: int | None = Field(default=None, description="Optional: exit code if known")
+
+
+class AnalyzeResponse(BaseModel):
+    classification: FailureClassification = Field(
+        ...,
+        description="Failure type: test_failure, lint_failure, infra_failure, config_failure, unknown",
+    )
+    failing_step: str = Field(
+        ...,
+        description="The step or job name where the failure likely occurred",
+    )
+    key_error_line: str = Field(
+        ...,
+        description="The most important single error line from the log",
+    )
+    explanation: str = Field(
+        ...,
+        description="Detailed explanation of why the failure happened",
+    )
+    suggested_action: str = Field(
+        ...,
+        description="Suggested next action for the developer",
+    )

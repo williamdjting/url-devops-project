@@ -1,54 +1,54 @@
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+"""FastAPI application for CI Failure Triage Bot."""
 
-from . import crud, schemas, utils
-from .database import get_db
-from .settings import get_settings
+from pathlib import Path
 
-settings = get_settings()
-app = FastAPI(title=settings.app_name)
+from dotenv import load_dotenv
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"] ,
-    allow_headers=["*"],
+from fastapi import FastAPI, HTTPException
+
+# Load .env from project root so OPENROUTER_API_KEY and OPENROUTER_MODEL are set
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(_env_path)
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+from .schemas import AnalyzeRequest, AnalyzeResponse, CIProvider
+from .llm import analyze_log
+
+app = FastAPI(
+    title="CI Failure Triage Bot",
+    description="Paste CI logs, get structured failure analysis from an LLM.",
+    version="1.0.0",
 )
 
-
-@app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/shorten", response_model=schemas.ShortenResponse)
-def shorten_url(payload: schemas.ShortenRequest, db: Session = Depends(get_db)):
-    desired_code = payload.custom_code
-    if desired_code:
-        if not utils.is_code_available(db, desired_code):
-            raise HTTPException(status_code=400, detail="Custom code already in use")
-        code = desired_code
-    else:
-        code = utils.generate_code(settings.code_length)
-        while not utils.is_code_available(db, code):
-            code = utils.generate_code(settings.code_length)
-
-    existing = crud.get_by_target(db, str(payload.url))
-    if existing:
-        short = existing
-    else:
-        short = crud.create_short_url(db=db, code=code, target_url=str(payload.url))
-
-    short_url = f"{str(settings.base_url).rstrip('/')}/{short.code}"
-    return schemas.ShortenResponse(code=short.code, short_url=short_url, created_at=short.created_at)
+# Mount static files (single-page UI)
+static_dir = Path(__file__).resolve().parent.parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
-@app.get("/{code}")
-def redirect(code: str, db: Session = Depends(get_db)):
-    record = crud.get_by_code(db, code)
-    if not record:
-        raise HTTPException(status_code=404, detail="Code not found")
-    return RedirectResponse(record.target_url)
+@app.get("/")
+async def root():
+    """Serve the single-page UI."""
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"message": "CI Failure Triage Bot API. Open /static/index.html for the UI."}
+
+
+@app.post("/api/analyze", response_model=AnalyzeResponse)
+async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    """
+    Analyze pasted CI log with an LLM and return structured triage result.
+    """
+    if not request.log_content or not request.log_content.strip():
+        raise HTTPException(status_code=400, detail="Log content is required")
+    try:
+        return analyze_log(request)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}",
+        )

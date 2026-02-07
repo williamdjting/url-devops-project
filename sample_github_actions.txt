@@ -1,0 +1,38 @@
+==============================
+GITHUB ACTIONS BUILD LOG
+==============================
+
+Run actions/checkout@v3
+Syncing repository: william/sample-python-app
+Checking out commit 9f8e7d6c5b4a3
+
+Run actions/setup-python@v4
+Successfully set up Python 3.10.12
+
+Run pip install -r requirements.txt
+Collecting flask==2.0.3
+Collecting requests==2.28.1
+Installing collected packages: flask, requests
+Successfully installed flask-2.0.3 requests-2.28.1
+
+Run python -m pytest
+============================= test session starts =============================
+platform linux -- Python 3.10.12, pytest-7.4.0
+collected 4 items
+
+tests/test_app.py ..F.
+
+=================================== FAILURES ===================================
+________________________ test_database_connection ________________________
+
+    def test_database_connection():
+>       connect_to_db()
+E       ConnectionError: Database connection timed out
+
+tests/test_app.py:42
+=========================== short test summary info =============================
+FAILED tests/test_app.py::test_database_connection
+ERROR: Process completed with exit code 1.
+
+Post job cleanup.
+Error: The operation was canceled.

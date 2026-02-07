@@ -1,108 +1,58 @@
-# URL Shortener (FastAPI + React)
+# CI Failure Triage Bot
 
-A tiny two-endpoint FastAPI backend with a lightweight React UI. The backend persists short codes in PostgreSQL and the frontend lets you create short links.
+A simple web app that triages CI failures using an LLM. Paste raw CI logs from **GitHub Actions** or **Jenkins**; the app does not run builds or connect to any CI system—logs are the source of truth.
 
-## Requirements
+## User flow
 
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 14+
+1. Open the UI in the browser.
+2. Paste CI log output into the text box.
+3. Optionally select the CI provider (GitHub Actions or Jenkins).
+4. Click **Analyze**.
+5. View the result on the same page.
 
-## Database setup
+## What you get
 
-### One-time setup
+- **Failure classification** — test failure, lint failure, infra failure, config failure, or unknown.
+- **Failing step** — where the failure likely occurred.
+- **Key error line** — the most important error line from the log.
+- **Explanation** — why the failure happened.
+- **Suggested action** — next step for the developer.
 
-**Install PostgreSQL:**
+## Setup
 
-**macOS:**
-```bash
-brew install postgresql@14
-brew services start postgresql@14
-```
-
-**Other platforms:** Download from [postgresql.org](https://www.postgresql.org/download/)
-
-**Create the database:**
-```bash
-# Connect to PostgreSQL
-psql postgres
-
-# Create the database
-CREATE DATABASE url_shortener;
-
-# Exit psql
-\q
-```
-
-**Configure database connection:**
-
-Create a `.env` file in the `backend/` directory:
+### 1. Backend (Python)
 
 ```bash
-cd /Users/williamting/Desktop/url-devops-project/backend
-cp ../.env.example .env
-```
-
-Edit `backend/.env` and set your `DATABASE_URL`:
-
-```
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/url_shortener
-```
-
-Replace `postgres:postgres` with your PostgreSQL username and password if different.
-
-### Running the database
-
-**macOS:**
-```bash
-brew services start postgresql@14
-```
-
-**Other platforms:** Start PostgreSQL using your system's service manager.
-
-## Backend setup
-
-### One-time setup
-
-```bash
-cd /Users/williamting/Desktop/url-devops-project/backend
+cd backend
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m app.init_db    # creates the short_urls table
 ```
 
-### Running the backend
+### 2. Environment
+
+Copy `.env.example` to `.env` and set your OpenRouter API key:
 
 ```bash
-cd /Users/williamting/Desktop/url-devops-project/backend
-source .venv/bin/activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cp .env.example .env
+Edit .env and set OPENROUTER_API_KEY=sk-or-...
 ```
 
-### API quick reference
-
-- `POST /shorten` → body `{ "url": "https://example.com", "custom_code": "alias"? }`
-- `GET /{code}` → HTTP 307 redirect to the stored URL
-
-## Frontend setup
-
-### One-time setup
+### 3. Run
 
 ```bash
-cd /Users/williamting/Desktop/url-devops-project/frontend
-npm install
+cd backend
+uvicorn app.main:app --reload
 ```
 
-### Running the frontend
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
 
-```bash
-cd /Users/williamting/Desktop/url-devops-project/frontend
-npm run dev
-```
+## API
 
-Set `VITE_API_BASE` in a `.env` file inside `frontend/` if the backend runs on a different host/port.
+- **POST /api/analyze** — body: `{ "log_content": "...", "ci_provider": "github_actions" | "jenkins" | null }`. Returns the structured analysis (classification, failing_step, key_error_line, explanation, suggested_action).
 
-## Database schema
+## Tech
 
-`backend/app/models.py` defines a single `short_urls` table containing `code`, `target_url`, and timestamps. Running `python -m app.init_db` will create the table in the configured database, so no additional migration tooling is required for this minimal app.
+- **Backend:** FastAPI, OpenRouter API (structured output; supports many models).
+- **Frontend:** Single HTML page (no build step).
+- **Logs:** Treated as raw text; no regex-heavy parsing—the LLM extracts meaning from unstructured log output.
